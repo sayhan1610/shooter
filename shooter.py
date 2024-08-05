@@ -65,6 +65,8 @@ font = pygame.font.Font(None, 36)
 
 # Game loop
 running = True
+playing = False
+game_over = False
 clock = pygame.time.Clock()
 
 def draw_text(text, font, color, surface, x, y):
@@ -73,89 +75,131 @@ def draw_text(text, font, color, surface, x, y):
     text_rect.topleft = (x, y)
     surface.blit(text_obj, text_rect)
 
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                bullet_rect = bullet_image.get_rect(midbottom=player_rect.midtop)
-                bullets.append(bullet_rect)
-                shoot_sound.play()
-    
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_LEFT] and player_rect.left > 0:
-        player_rect.x -= player_speed
-    if keys[pygame.K_RIGHT] and player_rect.right < SCREEN_WIDTH:
-        player_rect.x += player_speed
-    
-    # Spawn enemies
-    current_time = pygame.time.get_ticks()
-    if current_time - last_enemy_spawn_time > enemy_spawn_delay:
-        enemy_rect = enemy_image.get_rect(midtop=(random.randint(0, SCREEN_WIDTH - enemy_size[0]), 0))
-        enemies.append(enemy_rect)
-        last_enemy_spawn_time = current_time
-    
-    # Spawn power-ups
-    if current_time - last_powerup_spawn_time > powerup_spawn_delay:
-        powerup_rect = powerup_image.get_rect(midtop=(random.randint(0, SCREEN_WIDTH - powerup_size[0]), 0))
-        powerups.append(powerup_rect)
-        last_powerup_spawn_time = current_time
-
-    # Move bullets
-    for bullet in bullets[:]:
-        bullet.y -= bullet_speed
-        if bullet.bottom < 0:
-            bullets.remove(bullet)
-    
-    # Move enemies
-    for enemy in enemies[:]:
-        enemy.y += enemy_speed
-        if enemy.top > SCREEN_HEIGHT:
-            enemies.remove(enemy)
-            player_health -= 1
-            if player_health == 0:
-                running = False
-
-    # Move power-ups
-    for powerup in powerups[:]:
-        powerup.y += enemy_speed
-        if powerup.top > SCREEN_HEIGHT:
-            powerups.remove(powerup)
-    
-    # Check for collisions
-    for enemy in enemies[:]:
-        for bullet in bullets[:]:
-            if enemy.colliderect(bullet):
-                enemies.remove(enemy)
-                bullets.remove(bullet)
-                score += 1
-                explosion_sound.play()
-                break
-
-    for powerup in powerups[:]:
-        for bullet in bullets[:]:
-            if powerup.colliderect(bullet):
-                powerups.remove(powerup)
-                bullets.remove(bullet)
-                player_health += 2
-                break
-
-    # Draw everything
+def home_screen():
     screen.fill(BLACK)
-    screen.blit(player_image, player_rect)
-    for bullet in bullets:
-        screen.blit(bullet_image, bullet)
-    for enemy in enemies:
-        screen.blit(enemy_image, enemy)
-    for powerup in powerups:
-        screen.blit(powerup_image, powerup)
-    
-    # Draw score and health
-    draw_text(f'Score: {score}', font, WHITE, screen, 10, 10)
-    draw_text(f'Health: {player_health}', font, WHITE, screen, 10, 50)
-    
+    draw_text('Enhanced Shooting Game', font, WHITE, screen, SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50)
+    draw_text('Press ENTER to Play', font, WHITE, screen, SCREEN_WIDTH//2 - 100, SCREEN_HEIGHT//2)
     pygame.display.flip()
-    clock.tick(60)
+
+def end_screen(score):
+    screen.fill(BLACK)
+    draw_text('Game Over', font, RED, screen, SCREEN_WIDTH//2 - 50, SCREEN_HEIGHT//2 - 50)
+    draw_text(f'Final Score: {score}', font, WHITE, screen, SCREEN_WIDTH//2 - 50, SCREEN_HEIGHT//2)
+    draw_text('Press ENTER to Restart', font, WHITE, screen, SCREEN_WIDTH//2 - 100, SCREEN_HEIGHT//2 + 50)
+    pygame.display.flip()
+
+while running:
+    if not playing and not game_over:
+        home_screen()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    playing = True
+                    player_health = 3
+                    score = 0
+                    enemies = []
+                    bullets = []
+                    powerups = []
+    elif game_over:
+        end_screen(score)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    game_over = False
+                    playing = True
+                    player_health = 3
+                    score = 0
+                    enemies = []
+                    bullets = []
+                    powerups = []
+    else:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    bullet_rect = bullet_image.get_rect(midbottom=player_rect.midtop)
+                    bullets.append(bullet_rect)
+                    shoot_sound.play()
+        
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and player_rect.left > 0:
+            player_rect.x -= player_speed
+        if keys[pygame.K_RIGHT] and player_rect.right < SCREEN_WIDTH:
+            player_rect.x += player_speed
+        
+        # Spawn enemies
+        current_time = pygame.time.get_ticks()
+        if current_time - last_enemy_spawn_time > enemy_spawn_delay:
+            enemy_rect = enemy_image.get_rect(midtop=(random.randint(0, SCREEN_WIDTH - enemy_size[0]), 0))
+            enemies.append(enemy_rect)
+            last_enemy_spawn_time = current_time
+        
+        # Spawn power-ups
+        if current_time - last_powerup_spawn_time > powerup_spawn_delay:
+            powerup_rect = powerup_image.get_rect(midtop=(random.randint(0, SCREEN_WIDTH - powerup_size[0]), 0))
+            powerups.append(powerup_rect)
+            last_powerup_spawn_time = current_time
+
+        # Move bullets
+        for bullet in bullets[:]:
+            bullet.y -= bullet_speed
+            if bullet.bottom < 0:
+                bullets.remove(bullet)
+        
+        # Move enemies
+        for enemy in enemies[:]:
+            enemy.y += enemy_speed
+            if enemy.top > SCREEN_HEIGHT:
+                enemies.remove(enemy)
+                player_health -= 1
+                if player_health == 0:
+                    game_over = True
+                    playing = False
+
+        # Move power-ups
+        for powerup in powerups[:]:
+            powerup.y += enemy_speed
+            if powerup.top > SCREEN_HEIGHT:
+                powerups.remove(powerup)
+        
+        # Check for collisions
+        for enemy in enemies[:]:
+            for bullet in bullets[:]:
+                if enemy.colliderect(bullet):
+                    enemies.remove(enemy)
+                    bullets.remove(bullet)
+                    score += 1
+                    explosion_sound.play()
+                    break
+
+        for powerup in powerups[:]:
+            for bullet in bullets[:]:
+                if powerup.colliderect(bullet):
+                    powerups.remove(powerup)
+                    bullets.remove(bullet)
+                    player_health += 2
+                    break
+
+        # Draw everything
+        screen.fill(BLACK)
+        screen.blit(player_image, player_rect)
+        for bullet in bullets:
+            screen.blit(bullet_image, bullet)
+        for enemy in enemies:
+            screen.blit(enemy_image, enemy)
+        for powerup in powerups:
+            screen.blit(powerup_image, powerup)
+        
+        # Draw score and health
+        draw_text(f'Score: {score}', font, WHITE, screen, 10, 10)
+        draw_text(f'Health: {player_health}', font, WHITE, screen, 10, 50)
+        
+        pygame.display.flip()
+        clock.tick(60)
 
 pygame.quit()
