@@ -37,7 +37,7 @@ powerup_size = (30, 30)
 enemy2_size = (60, 60)
 bullet_enemy_size = (10, 20)
 ally_size = (50, 50)
-boss_size = (100, 100)
+boss_size = (100, 100)  # Boss size
 
 player_image = pygame.transform.scale(player_image, player_size)
 player2_image = pygame.transform.scale(player2_image, player2_size)
@@ -92,11 +92,9 @@ ally_shot_count = 0
 
 # Boss attributes
 boss_rect = None
-boss_speed = 3
-boss_bullets = []
-boss_bullet_speed = 7
-boss_shoot_delay = 2000  # milliseconds
-last_boss_shoot_time = pygame.time.get_ticks()
+boss_health = 10
+boss_shoot_delay = 500  # milliseconds
+boss_last_shoot_time = 0
 
 # Scoring
 score = 0
@@ -145,8 +143,6 @@ while running:
                     powerups = []
                     ally_rect = None  # Reset ally rect
                     ally_shot_count = 0  # Reset ally shot count
-                    boss_rect = None  # Reset boss rect
-                    boss_bullets = []  # Reset boss bullets
                     is_player2 = False
                     player_rect = player_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
     elif game_over:
@@ -167,8 +163,6 @@ while running:
                     powerups = []
                     ally_rect = None  # Reset ally rect
                     ally_shot_count = 0  # Reset ally shot count
-                    boss_rect = None  # Reset boss rect
-                    boss_bullets = []  # Reset boss bullets
                     is_player2 = False
                     player_rect = player_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
     else:
@@ -223,140 +217,175 @@ while running:
             enemy2_shoot_delays.append(current_time)  # Initialize last shoot time
             last_enemy2_spawn_time = current_time
 
-        # Spawn ally if score >= 40
-        if score >= 40 and ally_rect is None:
+        # Spawn boss if score reaches 100
+        if score >= 100 and boss_rect is None:
+            boss_rect = boss_image.get_rect(center=(SCREEN_WIDTH // 2, -boss_size[1]))
+
+        # Spawn ally if score >= 40 and no boss is present
+        if score >= 40 and ally_rect is None and boss_rect is None:
             ally_rect = ally_image.get_rect(midtop=(random.randint(0, SCREEN_WIDTH - ally_size[0]), 0))
 
-        # Spawn power-ups if score >= 60
-        if score >= 60 and current_time - last_powerup_spawn_time > powerup_spawn_delay:
+        # Update ally position
+        if ally_rect:
+            ally_rect.y += enemy_speed
+            if ally_rect.top > SCREEN_HEIGHT:
+                ally_rect = None  # Remove ally if it goes off screen
+
+        # Enemy2 shooting logic
+        for i, enemy2 in enumerate(enemy2s[:]):
+            if current_time - enemy2_shoot_delays[i] > enemy2_shoot_delay:  # Reduced shooting rate
+                enemy2_bullet_rect = bullet_enemy_image.get_rect(midtop=enemy2.midbottom)
+                enemy2_bullets.append(enemy2_bullet_rect)
+                enemy2_shoot_delays[i] = current_time  # Update the last shoot time for this enemy2
+
+        # Spawn power-ups
+        if current_time - last_powerup_spawn_time > powerup_spawn_delay:
             powerup_rect = powerup_image.get_rect(midtop=(random.randint(0, SCREEN_WIDTH - powerup_size[0]), 0))
             powerups.append(powerup_rect)
             last_powerup_spawn_time = current_time
 
-        # Move and shoot enemies
-        for enemy_rect in enemies:
-            enemy_rect.y += enemy_speed
-            if enemy_rect.top > SCREEN_HEIGHT:
-                enemies.remove(enemy_rect)
-                score -= 10  # Penalty for missed enemy
+        # Move bullets
+        for bullet, velocity in bullets[:]:
+            bullet.x += velocity[0]
+            bullet.y += velocity[1]
+            if bullet.bottom < 0 or bullet.left < 0 or bullet.right > SCREEN_WIDTH:
+                bullets.remove((bullet, velocity))
+        
+        # Move enemy bullets
+        for enemy_bullet in enemy2_bullets[:]:
+            enemy_bullet.y += enemy2_bullet_speed
+            if enemy_bullet.top > SCREEN_HEIGHT:
+                enemy2_bullets.remove(enemy_bullet)
 
-        # Move and shoot extra enemies
-        for i, enemy2_rect in enumerate(enemy2s):
-            enemy2_rect.y += enemy2_speed
-            if enemy2_rect.top > SCREEN_HEIGHT:
-                enemy2s.pop(i)
-                enemy2_shoot_delays.pop(i)
-                score -= 20  # Penalty for missed extra enemy
+        # Move enemies
+        for enemy in enemies[:]:
+            enemy.y += enemy_speed
+            if enemy.top > SCREEN_HEIGHT:
+                enemies.remove(enemy)
+                player_health -= 1
+                if player_health == 0:
+                    game_over = True
+                    playing = False
 
-            # Extra enemy shooting
-            if current_time - enemy2_shoot_delays[i] > enemy2_shoot_delay:
-                bullet_rect = bullet_enemy_image.get_rect(midbottom=enemy2_rect.midbottom)
-                bullet_velocity = [0, enemy2_bullet_speed]
-                enemy2_bullets.append((bullet_rect, bullet_velocity))
-                enemy2_shoot_delays[i] = current_time
+        # Move extra enemies
+        for enemy2 in enemy2s[:]:
+            enemy2.y += enemy2_speed
+            if enemy2.top > SCREEN_HEIGHT:
+                enemy2s.remove(enemy2)  # Don't reduce player health if enemy2 escapes
 
-        # Move and shoot power-ups
-        for powerup_rect in powerups:
-            powerup_rect.y += enemy_speed
-            if powerup_rect.top > SCREEN_HEIGHT:
-                powerups.remove(powerup_rect)
+        # Move power-ups
+        for powerup in powerups[:]:
+            powerup.y += enemy_speed
+            if powerup.top > SCREEN_HEIGHT:
+                powerups.remove(powerup)
 
-        # Move and shoot bullets
-        for bullet_rect, bullet_velocity in bullets[:]:
-            bullet_rect.x += bullet_velocity[0]
-            bullet_rect.y += bullet_velocity[1]
-            if bullet_rect.bottom < 0:
-                bullets.remove((bullet_rect, bullet_velocity))
+        # Move ally
+        if ally_rect:
+            ally_rect.y += enemy_speed
+            if ally_rect.top > SCREEN_HEIGHT:
+                ally_rect = None  # Remove ally if it goes off screen
 
-        # Move and shoot enemy2 bullets
-        for bullet_rect, bullet_velocity in enemy2_bullets[:]:
-            bullet_rect.x += bullet_velocity[0]
-            bullet_rect.y += bullet_velocity[1]
-            if bullet_rect.top > SCREEN_HEIGHT or bullet_rect.left < 0 or bullet_rect.right > SCREEN_WIDTH:
-                enemy2_bullets.remove((bullet_rect, bullet_velocity))
-
-        # Move boss if it exists
+        # Move boss and make it shoot
         if boss_rect:
-            boss_rect.y += boss_speed
-            if boss_rect.top > SCREEN_HEIGHT:
-                boss_rect = None  # Remove boss if it goes off screen
-
-        # Boss shooting logic
-        if boss_rect:
-            current_time = pygame.time.get_ticks()
-            if current_time - last_boss_shoot_time > boss_shoot_delay:
-                spread_angle = 20
-                number_of_bullets = 3
-                angle_step = spread_angle / (number_of_bullets - 1)
-                for i in range(number_of_bullets):
-                    angle = (i - (number_of_bullets // 2)) * angle_step
-                    radians = math.radians(angle)
-                    boss_bullet_rect = bullet_enemy_image.get_rect(midbottom=boss_rect.midbottom)
-                    boss_bullet_velocity = [boss_bullet_speed * math.sin(radians), -boss_bullet_speed * math.cos(radians)]
-                    boss_bullets.append((boss_bullet_rect, boss_bullet_velocity))
-                last_boss_shoot_time = current_time
+            boss_rect.y += enemy_speed
+            if boss_rect.top > SCREEN_HEIGHT // 4:
+                # Boss shoots in all directions
+                if current_time - boss_last_shoot_time > boss_shoot_delay:
+                    boss_last_shoot_time = current_time
+                    # Shoot in 8 directions
+                    for angle in range(0, 360, 45):
+                        radians = math.radians(angle)
+                        bullet_rect = bullet_image.get_rect(midbottom=boss_rect.center)
+                        bullet_velocity = [bullet_speed * math.cos(radians), bullet_speed * math.sin(radians)]
+                        bullets.append((bullet_rect, bullet_velocity))
 
         # Check for collisions
-        for bullet_rect, _ in bullets[:]:
-            if bullet_rect.colliderect(boss_rect):
-                bullets.remove((bullet_rect, _))
-                boss_rect = None
-                score += 100  # Reward for defeating the boss
+        for enemy in enemies[:]:
+            for bullet, _ in bullets[:]:
+                if enemy.colliderect(bullet):
+                    enemies.remove(enemy)
+                    bullets.remove((bullet, _))
+                    score += 1
+                    explosion_sound.play()
+                    break
 
-        for enemy_rect in enemies[:]:
-            if enemy_rect.colliderect(player_rect):
-                player_health -= 1
-                enemies.remove(enemy_rect)
-                if player_health <= 0:
-                    game_over = True
-                    playing = False
+        for enemy2 in enemy2s[:]:
+            for bullet, _ in bullets[:]:
+                if enemy2.colliderect(bullet):
+                    enemy2s.remove(enemy2)
+                    bullets.remove((bullet, _))
+                    score += 2  # Double the points
+                    explosion_sound.play()
+                    break
 
-        for enemy2_rect in enemy2s[:]:
-            if enemy2_rect.colliderect(player_rect):
-                player_health -= 2
-                enemy2s.remove(enemy2_rect)
-                if player_health <= 0:
-                    game_over = True
-                    playing = False
+        for powerup in powerups[:]:
+            for bullet, _ in bullets[:]:
+                if powerup.colliderect(bullet):
+                    powerups.remove(powerup)
+                    bullets.remove((bullet, _))
+                    player_health += 2
+                    break
 
-        for powerup_rect in powerups[:]:
-            if powerup_rect.colliderect(player_rect):
-                player_health += 1
-                powerups.remove(powerup_rect)
-
-        for bullet_rect, _ in enemy2_bullets[:]:
-            if bullet_rect.colliderect(player_rect):
-                player_health -= 1
-                enemy2_bullets.remove((bullet_rect, _))
-                if player_health <= 0:
-                    game_over = True
-                    playing = False
-
-        if ally_rect and player_rect.colliderect(ally_rect):
-            ally_rect = None
-            ally_shot_count += 3
-
-        # Drawing
-        screen.fill(BLACK)
-        screen.blit(player_image, player_rect)
-        for bullet_rect, _ in bullets:
-            screen.blit(bullet_image, bullet_rect)
-        for enemy_rect in enemies:
-            screen.blit(enemy_image, enemy_rect)
-        for enemy2_rect in enemy2s:
-            screen.blit(enemy2_image, enemy2_rect)
-        for powerup_rect in powerups:
-            screen.blit(powerup_image, powerup_rect)
-        for boss_bullet_rect, _ in boss_bullets:
-            screen.blit(bullet_enemy_image, boss_bullet_rect)
         if boss_rect:
-            screen.blit(boss_image, boss_rect)
+            for bullet, _ in bullets[:]:
+                if boss_rect.colliderect(bullet):
+                    boss_health -= 1
+                    bullets.remove((bullet, _))
+                    if boss_health <= 0:
+                        boss_rect = None
+                        score += 100  # Add points for defeating the boss
+                    break
+
+        for enemy_bullet in enemy2_bullets[:]:
+            if enemy_bullet.colliderect(player_rect):
+                enemy2_bullets.remove(enemy_bullet)
+                player_health -= 1
+                if player_health == 0:
+                    game_over = True
+                    playing = False
+
+        # Check for ally collisions
+        if ally_rect:
+            for bullet, _ in bullets[:]:
+                if ally_rect.colliderect(bullet):
+                    bullets.remove((bullet, _))
+                    ally_shot_count += 1
+                    if ally_shot_count >= 3:
+                        ally_rect = None
+                        player_health -= 1
+                        ally_shot_count = 0
+                    break
+
+        # Transform player based on health
+        if player_health >= 10 and not is_player2:
+            is_player2 = True
+            player_rect = player2_image.get_rect(center=player_rect.center)
+        elif player_health < 10 and is_player2:
+            is_player2 = False
+            player_rect = player_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+
+        # Draw everything
+        screen.fill(BLACK)
+        screen.blit(player2_image if is_player2 else player_image, player_rect)
+        for bullet, _ in bullets:
+            screen.blit(bullet_image, bullet)
+        for enemy in enemies:
+            screen.blit(enemy_image, enemy)
+        for enemy2 in enemy2s:
+            screen.blit(enemy2_image, enemy2)
+        for enemy_bullet in enemy2_bullets:
+            screen.blit(bullet_enemy_image, enemy_bullet)
+        for powerup in powerups:
+            screen.blit(powerup_image, powerup)
         if ally_rect:
             screen.blit(ally_image, ally_rect)
+        if boss_rect:
+            screen.blit(boss_image, boss_rect)
         
+        # Draw score and health
         draw_text(f'Score: {score}', font, WHITE, screen, 10, 10)
-        draw_text(f'Health: {player_health}', font, WHITE, screen, SCREEN_WIDTH - 150, 10)
-
+        draw_text(f'Health: {player_health}', font, WHITE, screen, 10, 50)
+        
         pygame.display.flip()
         clock.tick(60)
 
