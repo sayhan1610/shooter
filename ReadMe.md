@@ -20,11 +20,11 @@ Welcome to the Space Shooter Game! This is a fun and action-packed arcade-style 
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/yourusername/enhanced-shooting-game.git
+   git clone https://github.com/sayhan1610/shooter.git
    ```
 2. Navigate to the project directory:
    ```sh
-   cd enhanced-shooting-game
+   cd shooter
    ```
 3. Install Pygame:
    ```sh
